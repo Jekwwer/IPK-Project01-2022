@@ -1,23 +1,40 @@
+/**
+ * IFJ21
+ *
+ * @brief IPK Project 1 - Lightweight HTTP Server
+ * @author Evgenii Shiliaev
+ * 
+ */
+
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#ifdef _WIN32
-#include <Windows.h>
-#else
+#include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
-#endif
+
 
 /** Constants */
-#define BUFFER_SIZE 100
+#define SMALL_BUFFER_SIZE 100
+#define MSG_BUFFER_SIZE 1024
 #define PROC_STAT_COLUMNS_NUM 10
+#define ERRORS 12 // number of errors' codes
+#define PROC_STAT "/proc/stat"
+#define PROC_CPUINFO "/proc/cpuinfo"
+#define CPU_NAME_REQUEST "GET /cpu-name "
+#define HOSTNAME_REQUEST "GET /hostname "
+#define LOAD_REQUEST "GET /load "
 
 /** Functions */
 double calculateProcessorUsage();
 void cleanBuffer(char[], int);
+char *getCPUname();
 char *getStringFromProcStat();
 void getValuesfromString(unsigned long long[], int, char *, int);
+void printError(int, const char *);
 
-// /proc/stat values (columns)
+/** /proc/stat values (columns) */
 enum CPUdata { USER,
                NICE,
                SYSTEM,
@@ -29,10 +46,126 @@ enum CPUdata { USER,
                GUEST,
                GUEST_NICE };
 
+/** errors' codes */
+enum errors {
+    NO_ERROR,
+    ARG_ERROR,
+    SOCKET_ERROR,
+    BIND_ERROR,
+    LISTEN_ERROR,
+    ACCEPT_ERROR,
+    FILE_OPEN_ERROR,
+    FILE_CLOSE_ERROR,
+    FILE_ERROR,
+    MALLOC_ERROR,
+    GETHOSTNAME_ERROR,
+    INTERNAL_ERROR
+};
 
-int main() {
-    printf("%f\n", calculateProcessorUsage());
-    return 0;
+/** main method */
+int main(int argc, const char *argv[]) {
+    int rc;
+    int welcomingSocket;
+    struct sockaddr_in socketAdr;
+    struct sockaddr_in socketAdrClient;
+    int portNum;
+
+    /** port getting */
+    if (argc != 2) {
+        printError(ARG_ERROR, argv[0]);
+        return ARG_ERROR;
+    }
+    portNum = atoi(argv[1]);
+
+    /** welcoming socket creating */
+    socklen_t socketAdrClientLen = sizeof(socketAdrClient);
+    if ((welcomingSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        printError(SOCKET_ERROR, "");
+        return SOCKET_ERROR;
+    }
+
+    memset(&socketAdr, 0, sizeof(socketAdr));
+    socketAdr.sin_family = AF_INET;
+    socketAdr.sin_addr.s_addr = INADDR_ANY;
+    socketAdr.sin_port = htons(portNum);
+
+    if ((rc = bind(welcomingSocket, (struct sockaddr *) &socketAdr, sizeof(socketAdr))) < 0) {
+        printError(BIND_ERROR, "");
+        return BIND_ERROR;
+    }
+
+    if ((listen(welcomingSocket, 1)) < 0) {
+        printError(LISTEN_ERROR, "");
+        return LISTEN_ERROR;
+    }
+
+    while (1) {
+        int communicationSocket = accept(welcomingSocket, (struct sockaddr *) &socketAdrClient, &socketAdrClientLen);
+        if (communicationSocket > 0) {
+
+            int internalServerErrorFlag = 0;
+            char buffer[MSG_BUFFER_SIZE] = "";
+            char response[MSG_BUFFER_SIZE] = "";
+            int request = 0;
+            while (internalServerErrorFlag == 0) {
+                request = recv(communicationSocket, buffer, 1024, 0);
+                if (request <= 0) {
+                    break;
+                }
+
+                if (strncmp(buffer, CPU_NAME_REQUEST, strlen(CPU_NAME_REQUEST)) == 0) {
+                    char *cpuName = getCPUname();
+                    if (cpuName == NULL) {
+                        internalServerErrorFlag = INTERNAL_ERROR;
+                    }
+                    else {
+                        sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n%s", cpuName);
+                        free(cpuName);
+                    }
+                }
+                else if (strncmp(buffer, HOSTNAME_REQUEST, strlen(HOSTNAME_REQUEST)) == 0) {
+                    char hostname[SMALL_BUFFER_SIZE];
+                    if (gethostname(hostname, SMALL_BUFFER_SIZE) != 0) {
+                        internalServerErrorFlag = INTERNAL_ERROR;
+                    }
+                    else {
+                        struct hostent *host = gethostbyname(hostname);
+                        if (host == NULL) {
+                            internalServerErrorFlag = INTERNAL_ERROR;
+                        }
+                        else {
+                            sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n%s\n", host->h_name);
+                        }
+                    }
+                }
+                else if (strncmp(buffer, LOAD_REQUEST, strlen(LOAD_REQUEST)) == 0) {
+                    double cpuUsage = calculateProcessorUsage();
+                    if (cpuUsage < 0) {
+                        internalServerErrorFlag = INTERNAL_ERROR;
+                    }
+                    else {
+                        sprintf(response, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n%.2f%%\n", cpuUsage);
+                    }
+                }
+                else {
+                    sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n404 Not Found\n");
+                }
+
+                if (internalServerErrorFlag != 0) {
+                    printError(internalServerErrorFlag, buffer);
+                    sprintf(response, "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n500 Internal Server Error\n");
+                }
+                send(communicationSocket, response, strlen(response), 0);
+                close(communicationSocket);
+            }
+        }
+        else {
+            printError(ACCEPT_ERROR, "");
+        }
+
+        close(communicationSocket);
+    }
+    return NO_ERROR;
 }
 
 /**
@@ -45,20 +178,20 @@ double calculateProcessorUsage() {
 
     char *prevData = getStringFromProcStat();
     if (prevData == NULL) {
-        return -1.0;
+        return -INTERNAL_ERROR;
     }
 
     sleep(1);
 
     char *currData = getStringFromProcStat();
     if (currData == NULL) {
-        return -1.0;
+        return -INTERNAL_ERROR;
     }
 
     unsigned long long int prevValues[PROC_STAT_COLUMNS_NUM];
     unsigned long long int currValues[PROC_STAT_COLUMNS_NUM];
-    getValuesfromString(prevValues, PROC_STAT_COLUMNS_NUM, prevData, BUFFER_SIZE);
-    getValuesfromString(currValues, PROC_STAT_COLUMNS_NUM, currData, BUFFER_SIZE);
+    getValuesfromString(prevValues, PROC_STAT_COLUMNS_NUM, prevData, SMALL_BUFFER_SIZE);
+    getValuesfromString(currValues, PROC_STAT_COLUMNS_NUM, currData, SMALL_BUFFER_SIZE);
 
     unsigned long long int PrevIdle = prevValues[IDLE] + prevValues[IOWAIT];
     unsigned long long int CurrIdle = currValues[IDLE] + currValues[IOWAIT];
@@ -96,18 +229,22 @@ void cleanBuffer(char array[], int length) {
  * @return string (char*)
  */
 char *getStringFromProcStat() {
-    char *firstLine = malloc(BUFFER_SIZE * sizeof(char));
-
-    FILE *proc_stat = fopen("/proc/stat", "r");
-    if (proc_stat == NULL) {
-        fprintf(stderr, "/proc/stat Open Error\n");
+    char *firstLine = malloc(SMALL_BUFFER_SIZE * sizeof(char));
+    if (firstLine == NULL) {
+        printError(MALLOC_ERROR, "");
         return NULL;
     }
 
-    fgets(firstLine, BUFFER_SIZE, proc_stat);
+    FILE *proc_stat = fopen(PROC_STAT, "r");
+    if (proc_stat == NULL) {
+        printError(FILE_OPEN_ERROR, PROC_STAT);
+        return NULL;
+    }
+
+    fgets(firstLine, SMALL_BUFFER_SIZE, proc_stat);
 
     if (fclose(proc_stat) == EOF) {
-        fprintf(stderr, "/proc/stat Close Error\n");
+        printError(FILE_CLOSE_ERROR, PROC_STAT);
         return NULL;
     }
 
@@ -117,29 +254,34 @@ char *getStringFromProcStat() {
 /**
  * @brief Getting int values from string to array
  * 
+ * @param array Array to fill
+ * @param arrayLength Array length
+ * @param string String of values
+ * @param stringLength String length
+ * 
  * @return nothing
  */
 void getValuesfromString(unsigned long long array[], int arrayLength, char *string, int stringLength) {
-    char buffer[BUFFER_SIZE] = "";
+    char buffer[SMALL_BUFFER_SIZE] = "";
     int arrayCounter = 0;
     int bufferCharCounter = 0;
     int stringCharCounter = 0;
     char c;
-    int tmp;
+    int value;
 
     while (stringCharCounter < stringLength) {
         c = string[stringCharCounter];
         if (c == ' ' || c == '\0') {
-            tmp = atoi(buffer);
+            value = atoi(buffer);
             /** if there is a number int the buffer (atoi returns 0 if converting wasn't successful )*/
-            if (tmp != 0 || (tmp == 0 && buffer[0] == '0')) {
-                array[arrayCounter] = tmp;
+            if (value != 0 || (value == 0 && buffer[0] == '0')) {
+                array[arrayCounter] = value;
                 arrayCounter++;
                 if (arrayCounter == arrayLength) {
                     return;
                 }
             }
-            cleanBuffer(buffer, BUFFER_SIZE);
+            cleanBuffer(buffer, SMALL_BUFFER_SIZE);
             bufferCharCounter = 0;
         }
         else {
@@ -153,3 +295,67 @@ void getValuesfromString(unsigned long long array[], int arrayLength, char *stri
         }
     }
 }
+
+/**
+ * @brief Getting cpu name from /proc/cpuinfo
+ * 
+ * @return cpu name if was found, else NULL
+ */
+char *getCPUname() {
+    char *cpuName = malloc(SMALL_BUFFER_SIZE * sizeof(char));
+    if (cpuName == NULL) {
+        printError(MALLOC_ERROR, "");
+        return NULL;
+    }
+
+    FILE *proc_cpuinfo = fopen(PROC_CPUINFO, "r");
+    if (proc_cpuinfo == NULL) {
+        printError(FILE_OPEN_ERROR, PROC_CPUINFO);
+        return NULL;
+    }
+
+    /** Looking for "model name" row*/
+    while (fgets(cpuName, SMALL_BUFFER_SIZE, proc_cpuinfo)) {
+        if (strncmp(cpuName, "model name", strlen("model name")) == 0) {
+            break;
+        }
+    }
+
+    /** Looking for separator*/
+    int i = 0;
+    while (cpuName[i++] != ':') { ; }
+
+    if (fclose(proc_cpuinfo) == EOF) {
+        printError(FILE_CLOSE_ERROR, PROC_CPUINFO);
+        return NULL;
+    }
+    strcpy(cpuName, &(cpuName[i + 1]));
+    return cpuName;
+}
+
+/**
+ * @brief Getting int values from string to array
+ * 
+ * @param errNum Error code number
+ * @param arg Argument
+ * 
+ * @return nothing
+ */
+void printError(int errNum, const char *arg) {
+    char errors[ERRORS][SMALL_BUFFER_SIZE] =
+            {"Success\n",
+             "ERROR: Bad argument!\nUsage: %s <port-number>\n",
+             "ERROR: socket() has failed!\n",
+             "ERROR: bind() has failed!\nPort can be already occupied.\n",
+             "ERROR: listen() has failed!\n",
+             "ERROR: accept() has failed!\n",
+             "ERROR: fopen() of %s has failed!\n",
+             "ERROR: fclose() of %s has failed!\n",
+             "",
+             "ERROR: malloc() has failed!\n",
+             "ERROR: gethostname() has failed!\n",
+             "INTERNAL ERROR!\n%s\n"};
+    fprintf(stderr, errors[errNum], arg);
+}
+
+//End of hinfosvc.c file
