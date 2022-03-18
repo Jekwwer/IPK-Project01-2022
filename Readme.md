@@ -20,7 +20,10 @@ make
 
 ### Communication Example
 
+![communication_example](https://github.com/Jekwwer/IPK-Project01-2022/blob/main/communication-example.gif?raw=true)
+<!--
 ![communication_example](https://i.ibb.co/Xycp0SD/usage-example.gif)
+-->
 
 ## Detailed Description
 
