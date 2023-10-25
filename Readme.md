@@ -53,3 +53,6 @@ The server can respond to the following requests:
 |      3       | BIND_ERROR     | Assigning a name to the socket has failed                                                                                                                                                                             | `ERROR: bind() has failed!`<br>`Port can be already occupied.`                                                                                         |
 |      4       | LISTEN_ERROR   | Marking the socket to accept incoming connection requests has failed                                                                                                                                                  | `ERROR: listen() has failed!`                                                                                                                          |
 |      8       | INTERNAL_ERROR | This error may appear due to, for example, memory allocation, file opening, or file closing errors.<br>HTTP Request message prints together with the detailed error description.<br>The server does not stop running. | `ERROR: malloc() has failed!`<br>`INTERNAL ERROR!`<br>`GET /cpu-name HTTP/1.1`<br>`Host: localhost:8080`<br>`User-Agent: curl/7.68.0`<br>`Accept: */*` |
+
+## Project Evaluation
+Total points: **20/20**
