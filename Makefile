@@ -11,6 +11,6 @@ hinfosvc: hinfosvc.c
 	$(CC) $(CFLAGS) hinfosvc.c -o hinfosvc
 
 zip:
-	zip xshili00.zip Makefile Readme.md hinfosvc.c
+	zip xshili00.zip Makefile README.md hinfosvc.c
 
 # End of Makefile
