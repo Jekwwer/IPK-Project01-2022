@@ -1,9 +1,12 @@
 /**
- * IFJ21
+ * @file hinfosvc.c
+ * @brief Implementation of a lightweight HTTP server for IPK Project 1.
  *
- * @brief IPK Project 1 - Lightweight HTTP Server
+ * This server handles simple HTTP GET requests to provide system information such as
+ * CPU name, hostname, and current CPU load.
+ *
+ * @see https://github.com/Jekwwer/IPK-Project01-2022
  * @author Evgenii Shiliaev
- * 
  */
 
 #include <arpa/inet.h>
@@ -62,7 +65,18 @@ enum errors {
     INTERNAL_ERROR
 };
 
-/** main method */
+/**
+ * @brief Entry point for the Lightweight HTTP Server.
+ *
+ * This server accepts a single command-line argument for the port number on which to listen.
+ * It then enters a loop where it waits for incoming connections, processes HTTP requests,
+ * and sends appropriate responses.
+ *
+ * @param argc The count of command-line arguments.
+ * @param argv The command-line arguments array. argv[1] is expected to be the port number.
+ *
+ * @return int Returns an error code if an error occurs, otherwise it will loop indefinitely.
+ */
 int main(int argc, const char *argv[]) {
     int rc;
     int welcomingSocket;
@@ -168,11 +182,16 @@ int main(int argc, const char *argv[]) {
     return NO_ERROR;
 }
 
+
 /**
- * @brief Calculating the current CPU usage
+ * @brief Calculate the processor's usage based on previous and current /proc/stat readings.
+ * 
+ * Uses a one second sleep interval to gather previous and current CPU times, then calculates
+ * the usage percentage based on the difference.
+ *
  * https://stacdataStringCounteroverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux
  * 
- * @return percent of CPU usage
+ * @return The CPU usage percentage, or a negative error code on failure.
  */
 double calculateProcessorUsage() {
 
@@ -213,9 +232,10 @@ double calculateProcessorUsage() {
 }
 
 /**
- * @brief Buffer Cleaning
+ * @brief Clean the given character buffer by setting all its elements to '\0'.
  * 
- * @return nothing
+ * @param array The character array to clean.
+ * @param length The length of the array.
  */
 void cleanBuffer(char array[], int length) {
     for (int i = 0; i < length; i++) {
@@ -224,9 +244,9 @@ void cleanBuffer(char array[], int length) {
 }
 
 /**
- * @brief Getting first row from /proc/stat
+ * @brief Get the first line from /proc/stat which contains the CPU time information.
  * 
- * @return string (char*)
+ * @return A pointer to a dynamically allocated string with the contents of the first line, or NULL on error.
  */
 char *getStringFromProcStat() {
     char *firstLine = malloc(SMALL_BUFFER_SIZE * sizeof(char));
@@ -252,14 +272,12 @@ char *getStringFromProcStat() {
 }
 
 /**
- * @brief Getting int values from string to array
+ * @brief Parse a string containing space-separated numbers and fill an array with the numeric values.
  * 
- * @param array Array to fill
- * @param arrayLength Array length
- * @param string String of values
- * @param stringLength String length
- * 
- * @return nothing
+ * @param array The array to be filled with the parsed numbers.
+ * @param arrayLength The maximum number of elements to store in the array.
+ * @param string The string containing the numbers to parse.
+ * @param stringLength The length of the string.
  */
 void getValuesfromString(unsigned long long array[], int arrayLength, char *string, int stringLength) {
     char buffer[SMALL_BUFFER_SIZE] = "";
@@ -297,9 +315,11 @@ void getValuesfromString(unsigned long long array[], int arrayLength, char *stri
 }
 
 /**
- * @brief Getting cpu name from /proc/cpuinfo
+ * @brief Retrieve the CPU name from /proc/cpuinfo.
  * 
- * @return cpu name if was found, else NULL
+ * Searches /proc/cpuinfo for the model name entry and extracts the CPU name from it.
+ *
+ * @return A pointer to a dynamically allocated string containing the CPU name, or NULL on error.
  */
 char *getCPUname() {
     char *cpuName = malloc(SMALL_BUFFER_SIZE * sizeof(char));
@@ -334,12 +354,12 @@ char *getCPUname() {
 }
 
 /**
- * @brief Getting int values from string to array
+ * @brief Print an error message corresponding to an error code with additional context.
  * 
- * @param errNum Error code number
- * @param arg Argument
- * 
- * @return nothing
+ * The function uses stderr for printing.
+ *
+ * @param errNum The error code number which corresponds to a predefined error message.
+ * @param arg A context argument that can be inserted into the error message if applicable.
  */
 void printError(int errNum, const char *arg) {
     char errors[ERRORS][SMALL_BUFFER_SIZE] =
@@ -358,4 +378,4 @@ void printError(int errNum, const char *arg) {
     fprintf(stderr, errors[errNum], arg);
 }
 
-//End of hinfosvc.c file
+/** End of hinfosvc.c file */
