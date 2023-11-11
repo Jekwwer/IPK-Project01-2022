@@ -4,7 +4,7 @@
 
 > **University**: [VUT FIT](https://www.fit.vut.cz/)
 >
-> **Course**: [IPK (Computer Communications and Networks)](https://www.fit.vut.cz/study/course/244865/.en)
+> **Course**: [Computer Communications and Networks (IPK)](https://www.fit.vut.cz/study/course/244865/.en)
 >
 > **Academic Year**: 2021/22
 
