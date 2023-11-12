@@ -2,11 +2,11 @@
 
 ### 🖥️ Lightweight HTTP Server
 
-> **University**: [VUT FIT](https://www.fit.vut.cz/)
+> 🎓 **University**: [VUT FIT](https://www.fit.vut.cz/)
 >
-> **Course**: [Computer Communications and Networks (IPK)](https://www.fit.vut.cz/study/course/244865/.en)
+> 📚 **Course**: [Computer Communications and Networks (IPK)](https://www.fit.vut.cz/study/course/244865/.en)
 >
-> **Academic Year**: 2021/22
+> 📅 **Academic Year**: 2021/22
 
 This HTTP server facilitates communication via the HTTP protocol and delivers an array of system information. It listens on a user-specified port and returns system details based on the endpoint requested by the user. The server is accessible using standard web browsers and command-line tools such as `wget` and `curl`.
 
